@@ -1,1 +1,32 @@
 /*  your css code here. If applicable */
+body {
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #000;
+  height: 100vh;
+  color: white;
+  font-family: sans-serif;
+}
+
+#app {
+  text-align: center;
+}
+
+.vid-container video {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -1;
+}
+
+.player-container {
+  z-index: 2;
+}
+
+.time-display {
+  font-size: 2em;
+  margin: 10px 0;
+}
