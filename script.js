@@ -1,78 +1,119 @@
-const video = document.querySelector('.bg-video');
-const videoSrc = document.querySelector('.bg-video source'); // because <video><source/></video>
-const audio = document.querySelector('.song');
-const playBtn = document.querySelector('.play');
-const timeDisplay = document.querySelector('.time-display');
-const presetBtns = document.querySelectorAll('.time-select button');
-const rainBtn = document.querySelector('.sound-picker .rain');
-const beachBtn = document.querySelector('.sound-picker .beach');
+// Elements
+const app = document.getElementById("app");
+const video = document.querySelector(".bg-video");
+const audio = document.getElementById("meditation-audio");
+const playBtn = document.querySelector(".play");
+const timeDisplay = document.querySelector(".time-display");
+const timeSelect = document.getElementById("time-select");
+const soundPicker = document.querySelector(".sound-picker");
 
-// --------- timer state ----------
-let duration = 600000;   // 10 mins default
+// State
+let duration = 600; // default 10 mins
 let remaining = duration;
-let timerId = null;
+let ticking = null;
 
-// M:S (no leading zero → "10:0")
-function paint(ms) {
-  const m = Math.floor(ms / 60000);
-  const s = Math.floor((ms % 60000) / 1000);
-  timeDisplay.textContent = ${m}:${s};
+// ---------- Helpers ----------
+function format(mmss) {
+  const m = Math.floor(mmss / 60);
+  const s = Math.floor(mmss % 60);
+  return `${m}:${s}`;
 }
-paint(remaining);
 
-// start/stop helpers
-function start() {
-  clearInterval(timerId);
-  timerId = setInterval(() => {
-    remaining -= 1000;
-    if (remaining <= 0) {
-      remaining = 0;
-      paint(remaining);
-      stop();
-      remaining = duration; // reset to chosen duration
-      paint(remaining);
-      return;
+function setTimeDisplay(sec) {
+  timeDisplay.textContent = format(sec).replace(/:0$/, ":0"); // keep 10:0 initial style
+}
+
+function startTick() {
+  stopTick();
+  ticking = setInterval(() => {
+    if (audio.paused) return;
+    remaining = Math.max(0, remaining - 1);
+    setTimeDisplay(remaining);
+    if (remaining === 0) {
+      pauseAll(true);
     }
-    paint(remaining);
   }, 1000);
 }
-function stop() {
-  clearInterval(timerId);
-  audio.pause();
-  playBtn.textContent = '▶️';
+
+function stopTick() {
+  if (ticking) clearInterval(ticking);
+  ticking = null;
 }
 
-// --------- events ----------
-// Play / Pause toggle
-playBtn.addEventListener('click', () => {
+function playAll() {
+  audio.play().catch(() => {}); // ignore autoplay block
+  // video is muted so it can autoplay
+  playBtn.textContent = "⏸";
+  startTick();
+}
+
+function pauseAll(reset = false) {
+  audio.pause();
+  playBtn.textContent = "▶";
+  stopTick();
+  if (reset) {
+    remaining = duration;
+    setTimeDisplay(remaining);
+    audio.currentTime = 0;
+  }
+}
+
+// ---------- Init display ----------
+setTimeDisplay(duration);
+
+// ---------- Events ----------
+playBtn.addEventListener("click", () => {
   if (audio.paused) {
-    audio.play();
-    playBtn.textContent = '⏸';
-    start();
+    // if starting fresh after reaching 0, reset remaining
+    if (remaining <= 0) remaining = duration;
+    playAll();
   } else {
-    stop();
+    pauseAll(false);
   }
 });
 
-// Time presets (2/5/10 minutes)
-presetBtns.forEach(b => {
-  b.addEventListener('click', () => {
-    duration = Number(b.dataset.time) || 600000;
-    remaining = duration;
-    paint(remaining);
-    if (!audio.paused) start(); // keep counting if already playing
-  });
+// Time selection buttons
+timeSelect.addEventListener("click", (e) => {
+  if (!(e.target instanceof HTMLButtonElement)) return;
+  const t = Number(e.target.dataset.time || 0);
+  if (!t) return;
+  duration = t;
+  remaining = t;
+  setTimeDisplay(remaining);
+  // if currently playing, restart the countdown from the new duration
+  if (!audio.paused) {
+    audio.currentTime = 0;
+    startTick();
+  }
 });
 
-// Sound picker: swap audio + background video
-function setMedia(kind) {
-  // Use local file names as per spec
-  const a = kind === 'rain' ? './Sounds/rain.mp3' : './Sounds/beach.mp3';
-  const v = kind === 'rain' ? './Sounds/rain.mp4' : './Sounds/beach.mp4';
-  audio.src = a;
-  videoSrc.src = v;
-  video.load(); // refresh <video> after changing <source>
-  if (!audio.paused) audio.play(); // keep playing if already in play state
-}
-rainBtn.addEventListener('click', () => setMedia('rain'));
-beachBtn.addEventListener('click', () => setMedia('beach'));
+// Sound / video mode picker
+soundPicker.addEventListener("click", (e) => {
+  if (!(e.target instanceof HTMLButtonElement)) return;
+  const mode = e.target.dataset.mode; // 'beach' or 'rain'
+  if (!mode) return;
+
+  // swap media sources
+  const audioSrc = `./Sounds/${mode}.mp3`;
+  const videoSrc = `./Sounds/${mode}.mp4`;
+
+  // Update audio
+  audio.pause();
+  audio.src = audioSrc;
+  audio.load();
+
+  // Update video (kept muted; just for ambience)
+  const source = video.querySelector("source");
+  source.src = videoSrc;
+  video.load(); // will autoplay due to muted+loop
+
+  // keep playing if we were playing
+  if (playBtn.textContent === "⏸") {
+    audio.play().catch(() => {});
+  }
+});
+
+// Make sure there is at least one <audio> and <video> element for tests
+// (already in DOM above). Also keep video muted for reliable autoplay.
+video.muted = true;
+video.loop = true;
